@@ -1,0 +1,24 @@
+@font-face{
+    font-family:dsDigitalBold;
+    src:url('../fonts/ds_digital/DS-DIGIB.TTF')
+}
+
+body{
+    background-color: rgb(32, 31, 31);
+    background-image: url('../img/404_pp2.png');
+    background-repeat: no-repeat; /* Do not repeat the image */
+    background-size: cover;
+    /* Full height */
+    height: 100%;
+}
+
+.dsDigitalFont{
+    font-family: dsDigitalBold;
+    color:lightsalmon;
+}
+
+.mainContainer{
+    margin-top: 10em;
+    align-items: flex-start;
+    text-align: center;
+}
