@@ -4,6 +4,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
+const sendgrid = require('../config/email/sendgrid');
 
 async function register(req,res){
     const {username, password, email} = req.body;
@@ -22,11 +23,38 @@ async function register(req,res){
                 }
             }
 
+            const activationToken = jwt.sign(
+                {username:username}, 
+                process.env.PRIVATE_KEY,
+                {expiresIn: Math.floor(Date.now() / 1000) + (60 * 10)} 
+            );
+
+            //test activate account parameters
+            //https://stackoverflow.com/questions/53892244/pass-parameter-to-node-js-api-call
+            const activationLink = `http://localhost:3500/users/activate/${username}/${activationToken}`;
+
             console.log(user);
 
-            usersCRUD.insertUser(user).then(result => {
+            usersCRUD.insertUserUnactivated(user).then(result => {
+
                 if(result){
-                    res.sendStatus(201);
+                    //compunere email
+                    sendgrid.email.to = email;
+                    sendgrid.email.subject = `Activate account for: ${username}`;
+                    sendgrid.email.text = `Click this link to activate your account: ${activationLink}`;
+                    sendgrid.email.html = `<strong>Click this link to activate your account: ${activationLink}</strong>`;
+
+                    sendgrid.client
+                        .send(sendgrid.email)
+                        .then(() => {
+                            console.log('Email sent')
+                        })  
+                        .catch((error) => {
+                            console.error(error)
+                        });
+                    
+                    res.status(201).json({"success":"An email has been sent to " + email + ".Activate your account by clicking the activation link."});
+
                 }else{
                     res.status(500).json({"error":"User has not been created dues to a server error"});
                 }
@@ -37,6 +65,42 @@ async function register(req,res){
         }
     }else{
         res.status(400).json({"incorrect parameters":"Username, Password and Email address required"});
+    }
+}
+
+async function activateUserAccount(req, res){
+    //multiple parameters
+    const username = req.params.username;
+    const token = req.params.token;
+    // console.log(username);
+    // console.log(token);
+    if(username && token){
+        const unactivatedUser = await usersCRUD.getUserUnactivated(username);
+        if(unactivatedUser){
+            try {
+                const decodedToken = jwt.verify(token,process.env.PRIVATE_KEY);
+                if(decodedToken.username === username){//double verification 
+                    
+                    await usersCRUD.deleteUserUnactivatedByName(username);
+                    const activateUser = await usersCRUD.insertUser(unactivatedUser);
+                    if(activateUser){
+                        res.status(200).json({"success":`${username} has been activated`});
+                    }
+                }
+            }catch(err) {
+                console.error(err);
+                res.status(400).json(err);
+            }
+        }else{
+            const searchUser = await usersCRUD.getUser(username);
+            if(searchUser){
+                res.status(302).json({"info":`User: ${username} has been already activated!`});
+            }else{
+                res.status(400).json({"error":"User to be activated not found!"});
+            }
+        }
+    }else{
+        res.status(400).json({"invalid activation link":"Missin parameters"});
     }
 }
 
@@ -80,7 +144,6 @@ async function logIn(req, res){
                 GET: resource obtained and is in body of message HEAD: headers in message body 
                 POST or PUT: resource describing result of the action sent in message body TRACE: message body contains request message as received
                  */
-
             }else{
                 res.status(403).json({"error":"password wrong"});
                 /* 403: Forbidden. Client lacks access rights to content; for example, may require password. */
@@ -175,4 +238,4 @@ async function getUsers(req,res){
     usersCRUD.getUsers().then(response => res.status(200).json(response));
 }
 
-module.exports = {getUsers, register, logIn, logOut, refreshToken};
+module.exports = {getUsers, register, logIn, logOut, refreshToken, activateUserAccount};

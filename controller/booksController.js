@@ -8,6 +8,9 @@ async function populateDatabase(req,res){
         });
 }
 
+//!ATENTIE
+//PUTEM SA LAUM DATELE FIE PRIN PARAMETRI IN BODY {author: <author_name>}; ex: getBooks
+//FIE PRIN PARAMETRII IN URL: router.get('/author/:author' <function>); ex: getBooksByAuthor
 async function getBooks(req, res){
     if(req.body.title){
         booksCRUD.getBookByTitle(req.body.title).then(result =>
@@ -23,5 +26,19 @@ async function getBooks(req, res){
     }
 }
 
-module.exports = {populateDatabase, getBooks}
+async function getBooksByAuthor(req, res){
+    const author = req.params.author;
+    booksCRUD.getBookByAuthor(author).then(result => {
+        res.status(200).json(result);
+    })
+}
+
+async function getBooksByTitle(req, res){
+    const title = req.params.title;
+    booksCRUD.getBookByTitle(title).then(result =>{
+        res.status(200).json(result);
+    })
+}
+
+module.exports = {populateDatabase, getBooks, getBooksByAuthor, getBooksByTitle}
 

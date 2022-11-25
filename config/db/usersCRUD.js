@@ -4,6 +4,7 @@ const mongodb = require('./mongodb');
 console.log(process.env.DATABASE_NAME);
 
 const usersCollection = () => mongodb.client.db('BOOKSAPP').collection("Users");
+const usersUnactivatedCollection = () => mongodb.client.db('BOOKSAPP').collection("Users_unactivated");
 
 async function getUsers(){
     try{
@@ -18,6 +19,15 @@ async function getUsers(){
 async function getUser(name){
     try{
         const result = await usersCollection().findOne({username:name});
+        return result;
+    }catch(err){
+        console.error(err);
+    }
+}
+
+async function getUserUnactivated(name){
+    try{
+        const result = await usersUnactivatedCollection().findOne({username:name});
         return result;
     }catch(err){
         console.error(err);
@@ -45,6 +55,18 @@ async function insertUser(user){
         }
     }
 
+async function insertUserUnactivated(user){
+    try{
+        const result = await usersUnactivatedCollection().insertOne(user);
+        console.log(result);
+        if(result.insertedId){
+            return true;
+        }
+    }catch(err){
+        console.log(err);
+    }
+}
+
 async function updateUser(name, properties){
     try{
         const result = await usersCollection().updateOne({username:name},{$set:properties});
@@ -65,6 +87,15 @@ async function deleteUserByName(name){
     }
 }
 
+async function deleteUserUnactivatedByName(name){
+    try{
+        const result = await usersUnactivatedCollection().deleteOne({username:name});
+        console.log(result);
+    }catch(err){
+        console.error(err);
+    }
+}
+
 async function deleteUserByEmail(email){
     try{
         const result = await usersCollection().deleteOne({email:email});
@@ -76,4 +107,4 @@ async function deleteUserByEmail(email){
 
 // updateUser('liviu',{username:'adyyo93',email:'adyyo93@gmail.com'});
 
-module.exports = {getUser, getUsers, insertUser, updateUser, deleteUserByName, getUserByProperty}
+module.exports = {getUser, getUsers, insertUser, updateUser, deleteUserByName, getUserByProperty, insertUserUnactivated, getUserUnactivated, deleteUserUnactivatedByName}
