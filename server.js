@@ -12,14 +12,14 @@ const cron = require('./config/scheduler/cron');
 
 cron.startScheduledTasks();
 
-app.use('/somepage|/api_info|/', express.static('./public'));
-app.use('/api_info', require('./routes/views'));
-app.use('/somepage', require('./routes/subdir'));
+app.use('/',express.static(path.join(__dirname,'public')));
+app.use('/', require('./routes/views'));
+app.use('/', require('./routes/subdir'));
 app.use('^/$|/index(.html)?',(req,res)=>{    
-        res.status(404).sendFile(path.join(__dirname,'Views','index.html'));
+        res.sendFile(path.join(__dirname,'views','index.html'));
 })
 
-
+app.use(corsConfig.accessControlAllowCredentials);
 app.use(corsConfig.cors(corsConfig.corsOptions));
 
 app.use(logRequests);
@@ -27,12 +27,12 @@ app.use(coockieParser());
 app.use(express.json());
 app.use('/users', require('./routes/api/users'));
 
-// app.use(authorization.checkToken);
+app.use(authorization.checkToken);
 app.use('/books', authorization.checkToken, require('./routes/api/books'));
 
 app.all('/*|*',(req,res)=>{
     if(req.accepts('html')){
-        res.status(404).sendFile(path.join(__dirname,'Views','404.html'));
+        res.status(404).sendFile(path.join(__dirname,'views','404.html'));
     }else if(req.accepts('json')){
         res.status(404).json({"error":"route does not exist"});
     }else{

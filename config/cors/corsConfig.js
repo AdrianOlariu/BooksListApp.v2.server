@@ -1,6 +1,6 @@
 const cors = require('cors');
 
-const whiteList = ['https://www.google.ro','http://127.0.0.1:56729'];
+const whiteList = ['https://www.google.ro','http://127.0.0.1:54990','http://127.0.0.1:59699'];
 
 // const corsOptions = {
 //     origin: 'https://www.google.ro/',
@@ -19,4 +19,17 @@ const corsOptions = {
     }
 }
 
-module.exports = {corsOptions, cors};
+function accessControlAllowCredentials(req,res,next){
+    //DEV:          PUT !req.headers.origin
+    //PRODUCTION:   REMOVE !req.headers.origin
+    if(whiteList.indexOf(req.headers.origin) !== -1 || !req.headers.origin){
+        console.log('Allowed origin:', req.headers.origin);
+        res.header('Access-Control-Allow-Credentials', true);
+        next();
+    }else{
+        console.log('UNAUTHORIZED ORIGIN:', req.headers.origin);
+        res.json({'Access Controll Allow Credentials':'not allowed by cors'});
+    }
+}
+
+module.exports = {corsOptions, cors, accessControlAllowCredentials};

@@ -5,19 +5,22 @@ const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
 const sendgrid = require('../config/email/sendgrid');
+const fetch = require('node-fetch');
 
 async function register(req,res){
-    const {username, password, email} = req.body;
-    if(username && password && email){
-        const checkUsernameAvailability = await usersCRUD.getUser(username);
-        console.log(checkUsernameAvailability);
-        if(!checkUsernameAvailability){
+    const {username, password, emailAddress, phoneNumber, desiredActivationMethod } = req.body;
+    if(username && password && emailAddress){
+        const checkUsernameAvailabilityInActivatedUsers = await usersCRUD.getUser(username);
+        const checkUsernameAvailabilityInUnactivatedUsers = await usersCRUD.getUserUnactivated(username);
+        console.log(checkUsernameAvailabilityInActivatedUsers, checkUsernameAvailabilityInUnactivatedUsers);
+        if(!checkUsernameAvailabilityInActivatedUsers && !checkUsernameAvailabilityInUnactivatedUsers){
             const hashedPassword = await bcrypt.hash(password, 10);
             
             const user = {
                 username:username,
                 password:hashedPassword,
-                email:email,
+                email:emailAddress,
+                phoneNumber:phoneNumber,
                 roles:{
                     user:1000
                 }
@@ -33,42 +36,59 @@ async function register(req,res){
             //https://stackoverflow.com/questions/53892244/pass-parameter-to-node-js-api-call
             const activationLink = `http://localhost:3500/users/activate/${username}/${activationToken}`;
 
-            console.log(user);
+            console.log('User registration informations',user);
 
-            usersCRUD.insertUserUnactivated(user).then(result => {
+            usersCRUD.insertUserUnactivated(user).then(async result => {
 
                 if(result){
-                    //compunere email
-                    sendgrid.email.to = email;
-                    sendgrid.email.subject = `Activate account for: ${username}`;
-                    sendgrid.email.text = `Click this link to activate your account: ${activationLink}`;
-                    sendgrid.email.html = `<strong>Click this link to activate your account: ${activationLink}</strong>`;
-
-                    sendgrid.client
+                    if(desiredActivationMethod === 'email'){
+                        //compunere email
+                        sendgrid.email.to = emailAddress;
+                        sendgrid.email.subject = `Activate account for: ${username}`;
+                        sendgrid.email.text = `Click this link to activate your account: ${activationLink}`;
+                        sendgrid.email.html = `<strong>Click this link to activate your account: ${activationLink}</strong>`;
+                        
+                        //REACTIVATE SENDING EMAIL
+                        sendgrid.client
                         .send(sendgrid.email)
                         .then(() => {
-                            console.log('Email sent')
+                            console.log('Email sent');
+                            res.status(201).json({"message":"An email has been sent to " + emailAddress + ". Activate your account by clicking the activation link."});
                         })  
                         .catch((error) => {
-                            console.error(error)
+                            res.status(201).json({"message":"User created but the email address with the activation link has not been sent."});
+                            console.error('Email not sent',error);
                         });
-                    
-                    res.status(201).json({"success":"An email has been sent to " + email + ".Activate your account by clicking the activation link."});
-
+                    }else if(desiredActivationMethod === 'phone'){
+                        const sendSms = await fetch(`http://sms.luxartem.ro/api?`+
+                        `key=${process.env.SMS_KEY}&phone=${phoneNumber}&`+
+                        `text=Hello ${username}, click this link to activate your account on MyBooksList: ${activationLink}`,{method:'POST', mode: 'no-cors'});
+                        console.log(sendSms);
+                        if(sendSms.status.toString().includes('20')){
+                            console.log('phone sms sent!');
+                            sendSms.json().then(data=>console.log(data));
+                            res.status(201).json({"message":"An SMS message has been sent to " + phoneNumber + ". Activate your account by clicking the activation link."});
+                        }else{
+                            res.status(201).json({"message":"User created but the SMS message with the activation link has not been sent."});
+                        }
+                    }
                 }else{
-                    res.status(500).json({"error":"User has not been created dues to a server error"});
+                    console.log('User has not been created dues to a server error')
+                    res.status(500).json({"message":"User has not been created dues to a server error"});
                 }
             });
-
         }else{
-            res.status(400).json({"error":"Username Already Exists"});
+            console.log('user already exists');
+            res.status(400).json({"message":"Username Already Exists"});
         }
     }else{
-        res.status(400).json({"incorrect parameters":"Username, Password and Email address required"});
+        console.log('Username, Password and Email address required');
+        res.status(400).json({"message":"Username, Password and Email address required"});
     }
 }
 
 async function activateUserAccount(req, res){
+    //make this link with req params and make a special page for activationg users that you serve from the server
     //multiple parameters
     const username = req.params.username;
     const token = req.params.token;
@@ -84,7 +104,8 @@ async function activateUserAccount(req, res){
                     await usersCRUD.deleteUserUnactivatedByName(username);
                     const activateUser = await usersCRUD.insertUser(unactivatedUser);
                     if(activateUser){
-                        res.status(200).json({"success":`${username} has been activated`});
+                        res.status(200).sendFile(path.join(__dirname,'..','views','activate.html'));
+                        // https://levelup.gitconnected.com/render-dynamic-content-in-nodejs-using-templates-a58cae681148
                     }
                 }
             }catch(err) {
@@ -100,11 +121,12 @@ async function activateUserAccount(req, res){
             }
         }
     }else{
-        res.status(400).json({"invalid activation link":"Missin parameters"});
+        res.status(400).json({"invalid activation link":"Missing parameters"});
     }
 }
 
 async function logIn(req, res){
+    console.log('attempting to login');
     const {username, password} = req.body;
     if(username && password){
         const foundUser = await usersCRUD.getUser(username);
@@ -137,8 +159,16 @@ async function logIn(req, res){
                     {refreshToken:refreshToken, accessToken:accessToken}
                     );
 
-                res.cookie('jwt', refreshToken, {maxAge: 24*60*60*1000, httpOnly: true});//maxAge is in milliseconds
-                res.status(200).json({"success":`Logged in as ${username}`,"accessToken":accessToken});
+                res.cookie('jwt', refreshToken, {maxAge: 24*60*60*1000, httpOnly: true, sameSite:'None', secure:true});//maxAge is in milliseconds
+                // res.status(200).json({"success":`Logged in as ${username}`,"accessToken":accessToken});
+                
+                res.status(200).json({
+                    "username": foundUser.username,
+                    "accessToken": accessToken, 
+                    //selectam pe baza valorii cele mai mari numele proprietatii cu acea valoare si o trimitem la client
+                    "role": Object.getOwnPropertyNames(foundUser.roles)[Object.values(foundUser.roles).indexOf(Math.max(...Object.values(foundUser.roles)))]
+                    });
+
                 /*
                 200: Everything OK. Request succeeded and is defined by the HTTP method used, as with the following examples:
                 GET: resource obtained and is in body of message HEAD: headers in message body 
@@ -168,7 +198,7 @@ async function logOut(req,res){
         console.log(req.body.username);
         let user;
         if(req.headers.cookie){ //if we get the cookie.
-            const jwtRefreshToken = req.headers.cookie?.toString().split('=')[1];
+            const jwtRefreshToken = req.headers.cookie.toString().split('=')[1];
             user = jwt.decode(jwtRefreshToken).username;
         }else{//if we don't get the cookie, we search for the username.
             user = req.body.username;
@@ -179,16 +209,16 @@ async function logOut(req,res){
         if(foundUser){
             if(foundUser.refreshToken){
                 addToBlacklist({accessToken:foundUser.accessToken, refreshToken:foundUser.refreshToken, timestamp: Date.now()});
-                res.status(200).json({"success":"logged out succesfully"});
+                res.status(200).json({"message":"logged out succesfully"});
             }else{
-                res.status(201).json({"error":"user was already logged out"});
+                res.status(201).json({"message":"user was already logged out"});
             }
             await usersCRUD.updateUser(foundUser.username, {refreshToken:"",accessToken:""});
         }else{
-            res.status(403).json({"error":"couldn't log out properly"});
+            res.status(403).json({"message":"couldn't log out properly"});
         }
     }else{
-        res.status(403).json({"error":"couldn't log out properly"});
+        res.status(403).json({"message":"couldn't log out properly"});
     }
 }
 
@@ -204,7 +234,7 @@ function addToBlacklist(accesRefreshTokens){
 async function refreshToken(req, res, next){
     if(req.headers.cookie){
         console.log('got the cookie:',req.headers.cookie);
-        const jwtRefreshToken = req.headers.cookie?.toString().split('=')[1];
+        const jwtRefreshToken = req.headers.cookie.toString().split('=')[1];
         try{
             const verifyAccessToken = jwt.verify(jwtRefreshToken, process.env.PRIVATE_KEY);
             console.log('verify access token:',verifyAccessToken);
@@ -221,15 +251,15 @@ async function refreshToken(req, res, next){
                     {expiresIn:'15m'}
                     );
                 await usersCRUD.updateUser(decodedToken.username, {accessToken:newAccessToken});
-                res.status(200).json({"success":`Access token generated for ${decodedToken.username}`,"accessToken":newAccessToken});
+                res.status(200).json({"message":`Access token generated for ${decodedToken.username}`,"accessToken":newAccessToken});
             }else{
-                res.status(500).json({"error":"New token has not been generated dues to a server error"});
+                res.status(500).json({"message":"New token has not been generated dues to a server error"});
             }
         }catch(err){
-            res.status(401).json({"error":err});
+            res.status(401).json({"message":err});
         }
     }else{
-        res.status(401).json({"error":"couldn't refresh the access token, refresh token is not present"});
+        res.status(401).json({"message":"couldn't refresh the access token, refresh token is not present"});
     }
 }
 

@@ -4,6 +4,7 @@ function verifyRoles(...roles){
     return (req, res, next)=>{
         console.log(req.headers.authorization.split(' ')[1]);
         const decoded = jwt.decode(req.headers.authorization.split(' ')[1]);
+        console.log('DECODAT:',decoded);
         let decodedRoles = [];
         let allowedRoles = [...roles];
         for(role in decoded.roles){
