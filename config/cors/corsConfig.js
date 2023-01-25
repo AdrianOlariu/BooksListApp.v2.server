@@ -1,6 +1,6 @@
 const cors = require('cors');
 
-const whiteList = ['https://www.google.ro','http://127.0.0.1:54990','http://127.0.0.1:59699'];
+const whiteList = ['https://www.google.ro','http://127.0.0.1:54990','http://127.0.0.1:61906','http://192.168.1.2:62497','http://brailei201.home.ro','http://brailei201.home.ro:62497'];
 
 // const corsOptions = {
 //     origin: 'https://www.google.ro/',
@@ -14,7 +14,7 @@ const corsOptions = {
         if(whiteList.indexOf(origin) !== -1 || !origin){//during development we let the UNDEFINED parameter in, because the origin comes as undefined
             callback(null, true);//error and allowed
         }else{
-            callback(new Error('Not allowed by CORS'))
+            callback(new Error('Not allowed by CORS'));
         }
     }
 }

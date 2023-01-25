@@ -23,7 +23,8 @@ async function register(req,res){
                 phoneNumber:phoneNumber,
                 roles:{
                     user:1000
-                }
+                },
+                clicked:0
             }
 
             const activationToken = jwt.sign(
@@ -34,7 +35,7 @@ async function register(req,res){
 
             //test activate account parameters
             //https://stackoverflow.com/questions/53892244/pass-parameter-to-node-js-api-call
-            const activationLink = `http://localhost:3500/users/activate/${username}/${activationToken}`;
+            const activationLink = `${process.env.APP_URL}/users/activate/${username}/${activationToken}`;
 
             console.log('User registration informations',user);
 
@@ -96,22 +97,34 @@ async function activateUserAccount(req, res){
     // console.log(token);
     if(username && token){
         const unactivatedUser = await usersCRUD.getUserUnactivated(username);
+        console.log(unactivatedUser);
         if(unactivatedUser){
-            try {
-                const decodedToken = jwt.verify(token,process.env.PRIVATE_KEY);
-                if(decodedToken.username === username){//double verification 
-                    
-                    await usersCRUD.deleteUserUnactivatedByName(username);
-                    const activateUser = await usersCRUD.insertUser(unactivatedUser);
-                    if(activateUser){
-                        res.status(200).sendFile(path.join(__dirname,'..','views','activate.html'));
-                        // https://levelup.gitconnected.com/render-dynamic-content-in-nodejs-using-templates-a58cae681148
+            if(unactivatedUser.clicked == 0){
+                await usersCRUD.updateUserUnactivated(username,{clicked:1});
+                res.status(200).json({"message":`You are about to activate the account for the user ${username}. Please refresh this page
+                or click the activation link one more time!`});
+            }else{
+                try {
+                    const decodedToken = jwt.verify(token,process.env.PRIVATE_KEY);
+                    if(decodedToken.username === username){//double verification
+                        
+                        await usersCRUD.deleteUserUnactivatedByName(username);
+                        const activateUser = await usersCRUD.insertUser(unactivatedUser);
+                        if(activateUser){
+                            res.status(200).json({"message":`your account for the user ${username} has been activated`});
+                            // res.status(200).sendFile(path.join(__dirname,'..','views','activate.html'));
+                            // https://levelup.gitconnected.com/render-dynamic-content-in-nodejs-using-templates-a58cae681148
+                            //make the activation page clickable via a button
+                            //make the activation page dynamic so you can put custom fetch button
+                            //for sms link, for example, the link is being clicked by a bot a presume, or something
+                        }
                     }
+                }catch(err) {
+                    console.error(err);
+                    res.status(400).json(err);
                 }
-            }catch(err) {
-                console.error(err);
-                res.status(400).json(err);
             }
+
         }else{
             const searchUser = await usersCRUD.getUser(username);
             if(searchUser){
@@ -159,9 +172,15 @@ async function logIn(req, res){
                     {refreshToken:refreshToken, accessToken:accessToken}
                     );
 
-                res.cookie('jwt', refreshToken, {maxAge: 24*60*60*1000, httpOnly: true, sameSite:'None', secure:true});//maxAge is in milliseconds
+                //Trimitem REFRESH_TOKEN-ul catre client(FRONT) print HTTP, intr-un COOKIE care e HTTP_ONLY, pentru a nu putea fi accesat
+                //de javascript sau prin alte metode 
+                //https://www.geeksforgeeks.org/http-cookies-in-node-js/
+                //---------------DEV:           res.cookie('jwt', refreshToken, {httpOnly: true, sameSite:'None', maxAge: 24 * 60 * 60 * 1000});
+                //---------------PRODUCTION:    res.cookie('jwt', refreshToken, {httpOnly: true, sameSite:'None', secure:true, maxAge: 24 * 60 * 60 * 1000});
+                res.cookie('jwtRefreshToken', refreshToken, {httpOnly: true, sameSite:true, maxAge: 24 * 60 * 60 * 1000});//maxAge is in milliseconds
                 // res.status(200).json({"success":`Logged in as ${username}`,"accessToken":accessToken});
-                
+                //trimitem accessToken-ul intr-un JSON
+                //trimitem in roles, nivelul de autoritate al userului
                 res.status(200).json({
                     "username": foundUser.username,
                     "accessToken": accessToken, 
@@ -231,33 +250,37 @@ function addToBlacklist(accesRefreshTokens){
     fs.writeFileSync(path.join(__dirname,'..','config','scheduler','jwtsBlackList.json'),JSON.stringify(addedToken));
 }
 
-async function refreshToken(req, res, next){
+async function refreshToken(req, res){
+    
     if(req.headers.cookie){
-        console.log('got the cookie:',req.headers.cookie);
-        const jwtRefreshToken = req.headers.cookie.toString().split('=')[1];
         try{
+            console.log('got the cookie:',req.headers.cookie);
+            const jwtRefreshToken = req.headers.cookie.toString().split(';')[0].split('=')[1];
+            console.log(jwtRefreshToken);
+            
             const verifyAccessToken = jwt.verify(jwtRefreshToken, process.env.PRIVATE_KEY);
             console.log('verify access token:',verifyAccessToken);
             const foundUser = await usersCRUD.getUserByProperty({refreshToken:jwtRefreshToken});
             const decodedToken = jwt.decode(jwtRefreshToken);
             console.log(decodedToken);
             if(decodedToken.username === foundUser.username){//we verify if the user is still in the database to make sure we want to re-generate the access token,
-                                                            //not really necessary but extra security
+                //not really necessary but extra security
                 const newAccessToken = jwt.sign(
                     {username:decodedToken.username,
-                    email:foundUser.email,
-                    roles:foundUser.roles},
-                    process.env.PUBLIC_KEY, 
+                        email:foundUser.email,
+                        roles:foundUser.roles},
+                        process.env.PUBLIC_KEY, 
                     {expiresIn:'15m'}
                     );
-                await usersCRUD.updateUser(decodedToken.username, {accessToken:newAccessToken});
-                res.status(200).json({"message":`Access token generated for ${decodedToken.username}`,"accessToken":newAccessToken});
-            }else{
-                res.status(500).json({"message":"New token has not been generated dues to a server error"});
+                    await usersCRUD.updateUser(decodedToken.username, {accessToken:newAccessToken});
+                    res.status(200).json({"message":`Access token generated for ${decodedToken.username}`,"accessToken":newAccessToken});
+                }else{
+                    res.status(500).json({"message":"New token has not been generated dues to a server error"});
+                }
+            }catch(e){
+                res.status(401).json({"message":e});
             }
-        }catch(err){
-            res.status(401).json({"message":err});
-        }
+        
     }else{
         res.status(401).json({"message":"couldn't refresh the access token, refresh token is not present"});
     }

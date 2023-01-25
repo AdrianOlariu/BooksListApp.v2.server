@@ -67,6 +67,17 @@ async function insertUserUnactivated(user){
     }
 }
 
+async function updateUserUnactivated(name, properties){
+    try{
+        const result = await usersUnactivatedCollection().updateOne({username:name},{$set:properties});
+        //pt upsert am folosi
+        // ------------------------------------updateOne({username:name}, {$set:properties}, {upsert:true});
+        console.log(result);
+    }catch(err){
+        console.error(err);
+    }
+}
+
 async function updateUser(name, properties){
     try{
         const result = await usersCollection().updateOne({username:name},{$set:properties});
@@ -107,4 +118,4 @@ async function deleteUserByEmail(email){
 
 // updateUser('liviu',{username:'adyyo93',email:'adyyo93@gmail.com'});
 
-module.exports = {getUser, getUsers, insertUser, updateUser, deleteUserByName, getUserByProperty, insertUserUnactivated, getUserUnactivated, deleteUserUnactivatedByName}
+module.exports = {getUser, getUsers, insertUser, updateUser, deleteUserByName, getUserByProperty, insertUserUnactivated, getUserUnactivated, deleteUserUnactivatedByName, updateUserUnactivated}
