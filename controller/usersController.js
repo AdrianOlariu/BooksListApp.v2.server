@@ -198,13 +198,19 @@ async function logIn(req, res){
                 /* 403: Forbidden. Client lacks access rights to content; for example, may require password. */
             }
         }else{
-            res.status(400).json({"error":"An account with this username does not exists"});
+            const foundUserUnactivated = await usersCRUD.getUserUnactivated(username);
+            console.log(foundUserUnactivated);
+            if(foundUserUnactivated){
+                res.status(302).json({"message":`The ${username} account has not been activated! Activate it by visiting the link recieved!`});
+            }else{
+                res.status(400).json({"message":"An account with this username does not exists"});
+            }
             /* 
             400s: Client error codes: website or page not reached; page unavailable or there was a technical problem with the request (400–499).
             */
         }
     }else{
-        res.status(400).json({"incorrect parameters":"Username, Password are required for login"});
+        res.status(400).json({"message":"Username, Password are required for login"});
         /* 
         400s: Client error codes: website or page not reached; page unavailable or there was a technical problem with the request (400–499).
         */
@@ -291,4 +297,72 @@ async function getUsers(req,res){
     usersCRUD.getUsers().then(response => res.status(200).json(response));
 }
 
-module.exports = {getUsers, register, logIn, logOut, refreshToken, activateUserAccount};
+async function deleteUser(req, res){
+    let {username} = req.query;
+
+    const result = await usersCRUD.deleteUserByName(username);
+    if(result){
+        if(result.deletedCount != 0){
+            console.log('deleted:',username);
+            res.status(200).json({"message":`${username} deleted!`});
+        }else if(result.deletedCount === 0 || !result.deletedCount){
+            res.status(204).json({"message":`${username} probably doesn't exist in db!`});
+        }
+    }else{
+        res.status(500).json({"message":"there has been a server err"});
+    }
+}
+
+function generateRolesObject(array){
+    let roles = {};
+    for(let role of array){
+        if(role === "user"){
+            roles["user"] = 1000;
+        }
+        if(role === "editor"){
+            roles["editor"] = 2000;
+        }
+        if(role === "admin"){
+            roles["admin"] = 4000;
+        }
+    }
+    return roles;
+}
+
+
+async function editUser(req, res){
+    let {username, email, phone, roles, books} = req.query;
+    let rolesObj = {};
+    let rolesArr = [];
+    
+    if(roles){
+        rolesArr = roles.replace(/ /g,"").split(',');
+        rolesObj = generateRolesObject(rolesArr);
+        console.log(rolesObj);
+    }
+
+    //dynamically building the object
+    let properties = {};
+    email ? properties.email = email : '';
+    phone ? properties.phoneNumber = phone : '';
+    
+    roles ? properties.roles = rolesObj : '';
+    books ? properties.books = books : '';
+
+    console.log('properties:', properties);
+
+    const result = await usersCRUD.updateUser(username, properties);
+    console.log(result);
+    if(result){
+        if(result.modifiedCount != 0){
+            console.log('updated:',username);
+            res.status(202).json({"message":`${username} has been updated!`});
+        }else if(result.modifiedCount === 0 ){
+            res.status(204).json({"message":`${username} has not been updated!`});
+        }
+    }else{
+        res.status(500).json({"message":"there has been a server err"});
+    }
+}
+
+module.exports = {getUsers, register, logIn, logOut, refreshToken, activateUserAccount, deleteUser, editUser};

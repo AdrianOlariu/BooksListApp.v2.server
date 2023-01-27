@@ -84,15 +84,19 @@ async function updateUser(name, properties){
         //pt upsert am folosi
         // ------------------------------------updateOne({username:name}, {$set:properties}, {upsert:true});
         console.log(result);
+        return result;
     }catch(err){
         console.error(err);
     }
 }
 
+// updateUser("adrian1993", {email:"test2", phoneNumber:"123", roles:{user:1000,editor:2000}});
+
 async function deleteUserByName(name){
     try{
         const result = await usersCollection().deleteOne({username:name});
         console.log(result);
+        return result;
     }catch(err){
         console.error(err);
     }
