@@ -2,12 +2,11 @@ require('dotenv').config({path:'../.env'});
 const mongodb = require('mongodb');
 
 const client = new mongodb.MongoClient(
-    process.env.DATABASE_URI,
-    {
+    process.env.DATABASE_URI,{
         useNewUrlParser: true, 
         useUnifiedTopology: true, 
-        serverApi: mongodb.ServerApiVersion.v1
-    });
+        serverApi: mongodb.ServerApiVersion.v1}
+        );
 
 const db = () => client.db(process.env.DATABASE_NAME);
 

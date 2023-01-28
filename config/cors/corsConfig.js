@@ -1,6 +1,6 @@
 const cors = require('cors');
 
-const whiteList = ['https://www.google.ro','http://127.0.0.1:54990','http://127.0.0.1:61906','http://192.168.1.2:62497','http://brailei201.home.ro','http://brailei201.home.ro:63977'];
+const whiteList = ['http://brailei201.home.ro','http://brailei201.home.ro:52437'];
 
 // const corsOptions = {
 //     origin: 'https://www.google.ro/',

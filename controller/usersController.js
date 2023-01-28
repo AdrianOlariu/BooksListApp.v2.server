@@ -365,4 +365,17 @@ async function editUser(req, res){
     }
 }
 
-module.exports = {getUsers, register, logIn, logOut, refreshToken, activateUserAccount, deleteUser, editUser};
+async function addBookToUserList(req, res){
+    const {username, book} = req.query;
+    console.log(book);
+    let bookObj = JSON.parse(book);
+    console.log(bookObj);
+    if(!bookObj.status){
+        bookObj.status = "Want to read!"
+    }
+    const updateUsersBooks = await usersCRUD.addBookToUser(username, bookObj);
+    console.log(updateUsersBooks);
+    res.status(200).json({"message":`book added to list`});
+}
+
+module.exports = {getUsers, register, logIn, logOut, refreshToken, activateUserAccount, deleteUser, editUser, addBookToUserList};
