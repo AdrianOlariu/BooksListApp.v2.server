@@ -14,7 +14,8 @@ router.get('/activate/:username/:token', usersController.activateUserAccount);//
 //admin actions on users
 router.delete('/delete', authorization.checkToken, verifyRoles.verifyRoles(4000), usersController.deleteUser);
 router.put('/update', authorization.checkToken, verifyRoles.verifyRoles(4000), usersController.editUser);//METHOD: PUT
-router.put('/book', usersController.addBookToUserList);//METHOD: PUT
-// authorization.checkToken, verifyRoles.verifyRoles(1000), 
+
+router.put('/book', authorization.checkToken, verifyRoles.verifyRoles(1000), authorization.verifyIdentity, usersController.addBookToUserList);//METHOD: PUT
 
 module.exports = router;
+

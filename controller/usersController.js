@@ -332,6 +332,7 @@ function generateRolesObject(array){
 
 async function editUser(req, res){
     let {username, email, phone, roles, books} = req.query;
+    console.log(req.query);
     let rolesObj = {};
     let rolesArr = [];
     
@@ -367,7 +368,7 @@ async function editUser(req, res){
 
 async function addBookToUserList(req, res){
     const {username, book} = req.query;
-    console.log(book);
+    console.log(username, book);
     let bookObj = JSON.parse(book);
     console.log(bookObj);
     if(!bookObj.status){
@@ -375,7 +376,7 @@ async function addBookToUserList(req, res){
     }
     const updateUsersBooks = await usersCRUD.addBookToUser(username, bookObj);
     console.log(updateUsersBooks);
-    res.status(200).json({"message":`book added to list`});
+    res.status(200).json({"message":`Book added to ${username}'s list`});
 }
 
 module.exports = {getUsers, register, logIn, logOut, refreshToken, activateUserAccount, deleteUser, editUser, addBookToUserList};
